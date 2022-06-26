@@ -1,85 +1,110 @@
-#include <ResponsiveAnalogRead.h>
-#include <NativeEthernet.h>
-#include <NativeEthernetUdp.h>
-#include <OSCMessage.h>
-EthernetUDP Udp;
-
-
-// NETWORK SETTINGS
-IPAddress SELF_IP(192, 168, 1, 130);
-#define SELF_PORT 58300
-
-IPAddress DESTINATION_IP(192, 168, 1, 120);
-#define DESTINATION_PORT 4710 // THIS SHOULD MATCH THE OSC UDP RX PORT IN SYSTEM SETTINGS > SHOW CONTROL > OSC
-
-byte MAC_ADDRESS[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-
-
 // FADER TRIM SETTINGS
 #define TOP 960
 #define BOT 70
 int faderTrimTop[8] = {TOP, TOP, TOP, TOP, TOP, TOP, TOP, TOP}; // ADJUST THIS IF A SINGLE FADER ISN'T READING 255 AT THE TOP OF ITS TRAVEL
 int faderTrimBottom[8] = {BOT, BOT, BOT, BOT, BOT, BOT, BOT, BOT}; // ADJUST THIS IF A SINGLE FADER ISN'T READING 0 AT THE BOTTOM OF ITS TRAVEL
 
-#define TOUCH_THRESHOLD 30
+// MOTOR SETTINGS
+#define MOTOR_MAX_SPEED 210
+
+// Default MIN_SPEED for Main Board version 1.0-1.2 = 170
+// Default MIN_SPEED for Main Board version 1.3 = 190
+// Default MIN_SPEED for Main Board version 1.4 = 145
+#define MOTOR_MIN_SPEED 145
+
+// Default MOTOR_FREQUENCY for 1.0-1.3 = 18000
+// Default MOTOR_FREQUENCY for 1.4+ = 256
+#define MOTOR_FREQUENCY 256
+
+#define TOUCH_THRESHOLD 20
+
+// ETHERNET SETTINGS
+byte MAC_ADDRESS[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+int IP_ADDRESS[] = {192, 168, 1, 130};
+int EOS_ADDRESS[] = {192, 168, 1, 120};
+
+#define FADER_COUNT 4
+#define DEBUG false
+
+#include <NativeEthernetUdp.h>
+#include <OSCMessage.h>
+
+#define HEARTBEAT_INTERVAL 10
 
 
+EthernetUDP Udp;
+uint8_t packetBuffer[UDP_TX_PACKET_MAX_SIZE];
+int packetSize = 0;
+IPAddress DESTINATION_IP(EOS_ADDRESS[0], EOS_ADDRESS[1], EOS_ADDRESS[2], EOS_ADDRESS[3]);
+elapsedMillis sinceHeartbeat = -1000;
 
 
-static byte MOTOR_PINS_A[8] = {0, 2, 4, 6, 8, 10, 24, 28};
-static byte MOTOR_PINS_B[8] = {1, 3, 5, 7, 9, 12, 25, 29};
-ResponsiveAnalogRead faders[8] = {
-  ResponsiveAnalogRead(A9, true),
-  ResponsiveAnalogRead(A8, true),
-  ResponsiveAnalogRead(A7, true),
-  ResponsiveAnalogRead(A6, true),
-  ResponsiveAnalogRead(A5, true),
-  ResponsiveAnalogRead(A4, true),
-  ResponsiveAnalogRead(A3, true),
-  ResponsiveAnalogRead(A2, true)
-};
+void loop() {
+  if (getEthernetStatus() != 0) {
+
+    packetSize = Udp.parsePacket();
+    OSCMessage oscMsg;
+    if (packetSize) {
+      for (int j = 0; j < packetSize; j += UDP_TX_PACKET_MAX_SIZE - 1) {
+        Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE - 1);
+        oscMsg.fill(packetBuffer, UDP_TX_PACKET_MAX_SIZE - 1);
+      }
+      onOSCMessage(oscMsg);
+    }
+
+    if (sinceHeartbeat > HEARTBEAT_INTERVAL*1000) {
+      sinceHeartbeat = 0;
+      
+      String addrStr = "/eos/fader/1/config/"+FADER_COUNT;
+      char addr[21];
+      addrStr.toCharArray(addr, 21);
+      
+      OSCMessage msg(addr);
+    
+      Udp.beginPacket(DESTINATION_IP, 8080);
+      msg.send(Udp);
+      Udp.endPacket();
+
+
+    }
+  }
+  faderLoop();
+
+}
 
 void setup() {
   Serial.begin(9600);
+  delay(1500);
+  faderSetup();
 
-  for (byte i = 0; i < 8; i++) {
-    pinMode(MOTOR_PINS_A[i], OUTPUT);
-    pinMode(MOTOR_PINS_B[i], OUTPUT);
-    digitalWrite(MOTOR_PINS_A[i], LOW);
-    digitalWrite(MOTOR_PINS_B[i], LOW);
-    analogWriteFrequency(MOTOR_PINS_A[i], 18000);
-    analogWriteFrequency(MOTOR_PINS_B[i], 18000);
-    faders[i].setActivityThreshold(TOUCH_THRESHOLD);
-  }
+}
+
+void ethernetSetup(){
+  Udp.begin(8081);
   
-  Ethernet.begin(MAC_ADDRESS, SELF_IP);
-  if (Ethernet.linkStatus() == LinkON) {
-    Udp.begin(SELF_PORT);
-  } else {
-    Serial.println("Ethernet is not connected.");
-  }
-
 }
 
-void loop() {
+void faderHasMoved(byte i) {
 
-  for (byte i = 0; i < 8; i++) {
-    faders[i].update();
+  if (getEthernetStatus() != 0) {
+    char addr[] = "/eos/fader/1/x";
+    addr[13] = i + 49;
+    OSCMessage msg(addr);
+    msg.add((float) getFaderValue(i)/511.0);
 
-    if (faders[i].hasChanged()) {
-      char msg[] = "/eos/sub/x";
-      msg[9] = i+49;
-      
-      OSCMessage outMsg(msg);
-      outMsg.add(getFaderValue(i)/255.0);
-      Udp.beginPacket(DESTINATION_IP, DESTINATION_PORT);
-      outMsg.send(Udp);
-      Udp.endPacket();
-    }
+    Udp.beginPacket(DESTINATION_IP, 8080);
+    msg.send(Udp);
+    Udp.endPacket();
   }
-
-  delay(10);
 }
-int getFaderValue(byte fader) {
-  return max(0, min(255, map(faders[fader].getValue(), faderTrimBottom[fader], faderTrimTop[fader], 0, 255)));
+
+
+void onOSCMessage(OSCMessage &msg) {
+   msg.dispatch("/eos/fader/1/*", OSCFaderValue);
+}
+void OSCFaderValue(OSCMessage &msg) {
+  char f[1];
+  msg.getAddress(f, 13);
+  String faderIndex = String(f);
+  setFaderTarget(faderIndex.toInt()-1, msg.getFloat(0)*511);
 }
