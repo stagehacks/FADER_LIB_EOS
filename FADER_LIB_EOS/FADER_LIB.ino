@@ -185,7 +185,7 @@ byte ethernetStatus = 0;
 void networkInit() {
   Serial.println("Testing Ethernet Connection...");
 
-  IPAddress SELF_IP(IP_ADDRESS[0], IP_ADDRESS[1], IP_ADDRESS[2], IP_ADDRESS[3]);
+  IPAddress SELF_IP(OSC_UDP_TX_IP_Address[0], OSC_UDP_TX_IP_Address[1], OSC_UDP_TX_IP_Address[2], OSC_UDP_TX_IP_Address[3]);
 
   Ethernet.begin(MAC_ADDRESS, SELF_IP);
   ethernetStatus = ETHERNET_ONLINE_STATIC;

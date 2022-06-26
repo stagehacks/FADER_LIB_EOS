@@ -20,8 +20,10 @@ int faderTrimBottom[8] = {BOT, BOT, BOT, BOT, BOT, BOT, BOT, BOT}; // ADJUST THI
 
 // ETHERNET SETTINGS
 byte MAC_ADDRESS[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-int IP_ADDRESS[] = {192, 168, 1, 130};
 int EOS_ADDRESS[] = {192, 168, 1, 120};
+int OSC_UDP_TX_IP_Address[] = {192, 168, 1, 130};
+int OSC_UDP_RX_Port = 8080;
+int OSC_UDP_TX_Port = 8081;
 
 #define FADER_COUNT 4
 #define DEBUG false
@@ -61,7 +63,7 @@ void loop() {
       
       OSCMessage msg(addr);
     
-      Udp.beginPacket(DESTINATION_IP, 8080);
+      Udp.beginPacket(DESTINATION_IP, OSC_UDP_RX_Port);
       msg.send(Udp);
       Udp.endPacket();
 
@@ -80,7 +82,7 @@ void setup() {
 }
 
 void ethernetSetup(){
-  Udp.begin(8081);
+  Udp.begin(OSC_UDP_TX_Port);
   
 }
 
