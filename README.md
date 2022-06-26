@@ -1,2 +1,2 @@
 # FADER_LIB_EOS
- Control Submasters on ETC Eos consoles using Stage Hacks FADER_8
+ Control Faders on ETC Eos consoles using Stage Hacks FADER_8 and FADER_4
