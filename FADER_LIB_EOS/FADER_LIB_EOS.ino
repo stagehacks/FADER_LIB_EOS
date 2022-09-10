@@ -25,7 +25,7 @@ int OSC_UDP_TX_IP_Address[] = {192, 168, 1, 130};
 int OSC_UDP_RX_Port = 8080;
 int OSC_UDP_TX_Port = 8081;
 
-#define FADER_COUNT 4
+#define FADER_COUNT 8
 #define DEBUG false
 
 #include <NativeEthernetUdp.h>
