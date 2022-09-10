@@ -57,9 +57,9 @@ void loop() {
     if (sinceHeartbeat > HEARTBEAT_INTERVAL*1000) {
       sinceHeartbeat = 0;
       
-      String addrStr = "/eos/fader/1/config/"+FADER_COUNT;
+      String addrStr = "/eos/fader/1/config/"+String(FADER_COUNT);
       char addr[21];
-      addrStr.toCharArray(addr, 21);
+      addrStr.toCharArray(addr, 22);
       
       OSCMessage msg(addr);
     
